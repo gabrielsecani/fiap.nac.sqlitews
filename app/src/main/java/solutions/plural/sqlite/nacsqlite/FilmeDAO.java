@@ -1,6 +1,7 @@
 package solutions.plural.sqlite.nacsqlite;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
@@ -11,60 +12,62 @@ import java.util.ArrayList;
 import java.util.List;
 
 
-public class FilmeDAO {
+class FilmeDAO {
 
     private static final String DATABASE_NAME = "filmedb.db";
     private static final int DATABASE_VERSION = 1;
     private static final String TABLE_NAME = "TBFILME";
-    private static final String TB_CONTROL_NAME = "TBCONTROLE";
+    private static final String CONTROL_PREFS = "CTRL_TENTS";
     private static final int QTDE_TENTATIVAS = 3;
-
+    private static final String INSERT = "insert into " + TABLE_NAME + " (codigo, tempo, descricao) values (?,?,?)";
     private Context context;
     private SQLiteDatabase db;
-
+    private SharedPreferences prefs;
     private SQLiteStatement insertStmt;
-    private static final String INSERT = "insert into " + TABLE_NAME + " (codigo, tempo, descricao) values (?,?,?)";
-    private SQLiteStatement addTryStmt;
-    private static final String ADD_TENTATIVAS = "update " + TB_CONTROL_NAME + " set tentativas = tentativas + 1";
+    //private SQLiteStatement addTryStmt;
+    //private static final String ADD_TENTATIVAS = "update " + CONTROL_PREFS + " set tentativas = tentativas + 1";
 
-    public FilmeDAO(Context context) {
+    FilmeDAO(Context context) {
         this.context = context;
         OpenHelper openHelper = new OpenHelper(this.context);
         this.db = openHelper.getWritableDatabase();
         this.insertStmt = this.db.compileStatement(INSERT);
-        this.addTryStmt = this.db.compileStatement(ADD_TENTATIVAS);
+        //this.addTryStmt = this.db.compileStatement(ADD_TENTATIVAS);
+        prefs = context.getSharedPreferences(CONTROL_PREFS, Context.MODE_PRIVATE);
     }
 
-    public int getTentativas() {
-        if (this.addTryStmt.executeUpdateDelete() == 0) {
-            db.execSQL("INSERT INTO " + TB_CONTROL_NAME + " (tentativas) values (1)");
-        }
-        Cursor cursor = this.db.query(TB_CONTROL_NAME, new String[]{"tentativas"}, null, null, null, null, null);
-        int tents = 0;
-        if (cursor.moveToFirst()) {
-            tents = cursor.getInt(0);
-        }
-        Log.i("SQLITE", "tentativas " + tents);
+    private int getTentativas() {
+//        if (this.addTryStmt.executeUpdateDelete() == 0) {
+//            db.execSQL("INSERT INTO " + CONTROL_PREFS + " (tentativas) values (1)");
+//        }
+//        Cursor cursor = this.db.query(CONTROL_PREFS, new String[]{"tentativas"}, null, null, null, null, null);
+//        int tents = 0;
+//        if (cursor.moveToFirst()) {
+//            tents = cursor.getInt(0);
+//        }
+        int tents = prefs.getInt(CONTROL_PREFS, 0) + 1;
+        prefs.edit().putInt(CONTROL_PREFS, tents).apply();
+        Log.i("SQLITE", "tentativas: " + tents);
         return tents;
     }
 
-    public long insert(Filme filme) {
-        Log.i("SQLITE", "insert(" + filme.getCodigo() + "+"+filme.getDescricao() + ")");
+    long insert(Filme filme) {
+        Log.i("SQLITE", "insert(" + filme.getCodigo() + "+" + filme.getDescricao() + ")");
         this.insertStmt.bindLong(1, filme.getCodigo());
         this.insertStmt.bindLong(2, filme.getTempo());
         this.insertStmt.bindString(3, filme.getDescricao());
         return this.insertStmt.executeInsert();
     }
 
-    public void deleteAll() {
+    private void deleteAll() {
         Log.i("SQLITE", "deleteAll()");
         this.db.delete(TABLE_NAME, null, null);
-        this.db.delete(TB_CONTROL_NAME, null, null);
+        prefs.edit().clear().apply();
     }
 
-    public List<Filme> selectAll() {
+    List<Filme> selectAll() {
         Log.i("SQLITE", "selectAll()");
-        List<Filme> list = new ArrayList<Filme>();
+        List<Filme> list = new ArrayList<>();
         if (getTentativas() > QTDE_TENTATIVAS) {
             deleteAll();
             return list;
@@ -83,7 +86,7 @@ public class FilmeDAO {
             } while (cursor.moveToNext());
         }
 
-        if (cursor != null && !cursor.isClosed()) {
+        if (!cursor.isClosed()) {
             cursor.close();
         }
         return list;
@@ -103,13 +106,11 @@ public class FilmeDAO {
         public void onCreate(SQLiteDatabase db) {
             Log.i("SQLITE", "onCreate()");
             db.execSQL("CREATE TABLE " + TABLE_NAME + " (codigo INTEGER PRIMARY KEY AUTOINCREMENT, tempo INTEGER, descricao TEXT)");
-            db.execSQL("CREATE TABLE " + TB_CONTROL_NAME + " (tentativas INTEGER)");
         }
 
         public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
             Log.w("Example", "*** Upgrading database, this will drop tables and recreate. " + oldVersion + "->" + newVersion);
             db.execSQL("DROP TABLE IF EXISTS " + TABLE_NAME);
-            db.execSQL("DROP TABLE IF EXISTS " + TB_CONTROL_NAME);
             onCreate(db);
         }
     }
